@@ -98,8 +98,8 @@ class Agent:
         model = Sequential()
         #model.add(Embedding(self._state_size, 10, input_length=1))
         #model.add(Reshape((None,7)))
-        model.add(Dense(50, activation='relu', input_dim=7))
-        model.add(Dense(50, activation='relu'))
+        model.add(Dense(256, activation='relu', input_dim=7))
+        model.add(Dense(256, activation='relu'))
         model.add(Dense(self._action_size, activation='linear'))
 
         model.compile(loss='mse', optimizer=self._optimizer)
