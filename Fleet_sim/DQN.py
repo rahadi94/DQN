@@ -7,6 +7,20 @@ import numpy as np
 from collections import deque
 from Fleet_sim.location import closest_facility
 from Fleet_sim.log import lg
+import math
+import pandas as pd
+
+A = 0.5
+B = 0.1
+C = 0.1
+EPISODES = 20
+
+
+def epsilon_decay(time):
+    standardized_time = (time - A * EPISODES) / (B * EPISODES)
+    cosh = np.cosh(math.exp(-standardized_time))
+    epsilon = 1.1 - (1 / cosh + (time * C / EPISODES))
+    return epsilon / 1.5
 
 
 class Agent:
@@ -15,15 +29,15 @@ class Agent:
         # Initialize atributes
         self.env = env
         self._state_size = 7
-        self._action_size = 3
+        self._action_size = 5
         self._optimizer = Adam(learning_rate=0.01)
-        self.batch_size = 32
-        self.expirience_replay = deque(maxlen=2000)
+        self.batch_size = 64
+        self.expirience_replay = deque(maxlen=10000)
         self.episode = episode
         # Initialize discount and exploration rate
-        self.gamma = 0.6
+        self.gamma = 0.9
         self.Gamma = 0.9
-        self.epsilon = 0.1
+        self.epsilon = epsilon_decay(episode)
 
         # Build networks
         self.q_network = self._build_compile_model()
@@ -96,8 +110,8 @@ class Agent:
             # evaluate loaded model on test data
             model.compile(loss='mse', optimizer=self._optimizer)
         model = Sequential()
-        #model.add(Embedding(self._state_size, 10, input_length=1))
-        #model.add(Reshape((None,7)))
+        # model.add(Embedding(self._state_size, 10, input_length=1))
+        # model.add(Reshape((None,7)))
         model.add(Dense(256, activation='relu', input_dim=7))
         model.add(Dense(256, activation='relu'))
         model.add(Dense(self._action_size, activation='linear'))
@@ -110,10 +124,40 @@ class Agent:
 
     def act(self, state):
         if np.random.rand() <= self.epsilon:
-            return np.random.choice([0, 1, 2])
-
-        q_values = self.q_network.predict(state)
-        return np.argmax(q_values[0])
+            if state[0, 0] >= 7:
+                if state[0, 5] >= 1:
+                    action = np.random.choice([0, 1, 2, 3, 4])
+                else:
+                    action = np.random.choice([0, 2, 4])
+            else:
+                if state[0, 5] >= 1:
+                    action = np.random.choice([0, 1, 2, 4])
+                else:
+                    action = np.random.choice([0, 2, 4])
+        else:
+            q_values = self.q_network.predict(state)
+            df = pd.DataFrame(q_values)
+            if state[0, 0] > 70:
+                if state[0, 5] >= 1:
+                    action = np.argmax(df)
+                else:
+                    action = np.argmax(df.loc[0, [0, 2, 4]])
+                    if action == 1:
+                        action = 2
+                    elif action == 2:
+                        action = 4
+            else:
+                if state[0, 5] >= 1:
+                    action = np.argmax(df.loc[0, [0, 1, 2, 4]])
+                    if action == 3:
+                        action = 4
+                else:
+                    action = np.argmax(df.loc[0, [0, 2, 4]])
+                    if action == 1:
+                        action = 2
+                    elif action == 2:
+                        action = 4
+        return action
 
     def retrain(self, batch_size):
         minibatch = random.sample(self.expirience_replay, batch_size)
@@ -123,7 +167,18 @@ class Agent:
             target = self.q_network.predict(state)
 
             t = self.target_network.predict(next_state)
-            target[0][action] = reward + (self.gamma)**period * np.amax(t)
+            df = pd.DataFrame(t)
+            if state[0, 0] >= 7:
+                if state[0, 5] >= 1:
+                    df = df.loc[0, [0, 1, 2, 3, 4]]
+                else:
+                    df = df.loc[0, [0, 2, 4]]
+            else:
+                if state[0, 5] >= 1:
+                    df = df.loc[0, [0, 1, 2, 4]]
+                else:
+                    df = df.loc[0, [0, 2, 4]]
+            target[0][action] = reward + (self.gamma) ** period * np.amax(df)
 
             self.q_network.fit(state, target, epochs=1, verbose=0)
 
@@ -158,4 +213,3 @@ class Agent:
         vehicle.reward['missed'] = 0
         vehicle.reward['discharging'] = 0
         return action
-
