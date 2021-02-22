@@ -31,7 +31,7 @@ class Agent:
         self._state_size = 7
         self._action_size = 5
         self._optimizer = Adam(learning_rate=0.01)
-        self.batch_size = 64
+        self.batch_size = 32
         self.expirience_replay = deque(maxlen=10000)
         self.episode = episode
         # Initialize discount and exploration rate
