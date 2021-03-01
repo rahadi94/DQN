@@ -137,9 +137,18 @@ class Model:
         # action 0 ==> closest CS
         # action 1 ==> closest free CS
         # action 2 ==> closest fast CS
-        for i in range(len(self.charging_stations)):
-            if action == i:
-                charging_station = self.charging_stations[1]
+        if action == 0:
+            charging_station = closest_facility(self.charging_stations, vehicle)
+        elif action == 1:
+                    free_CS = [x for x in self.charging_stations if x.plugs.count < x.capacity]
+                    if len(free_CS) >= 1:
+                        charging_station = closest_facility(free_CS, vehicle)
+                    # we send the vehicle to the closest CS, if there is no free one
+                    else:
+                        charging_station = closest_facility(self.charging_stations, vehicle)
+        elif action == 2:
+            fast_CS = [x for x in self.charging_stations if x.power == 50 / 60]
+            charging_station = closest_facility(fast_CS, vehicle)
 
         # vehicle sends to the CS and enters the queue using a priority coming from its SOC
         yield self.env.process(self.start_charge(charging_station, vehicle))
@@ -505,10 +514,10 @@ class Model:
             if event_trip_end in events:
                 lg.info(f'A vehicle gets idle at {self.env.now}')
                 action = self.charge_check(vehicle)
-                if action in np.arange(16):
+                if action in [0, 1, 2]:
                     self.env.process(self.charge_task(vehicle, action))
                     yield self.env.timeout(0.001)
-                elif action == 16:
+                elif action == 3:
                     self.env.process(self.discharge_task(vehicle))
                     yield self.env.timeout(0.001)
                 else:
