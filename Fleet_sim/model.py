@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import simpy
 import random
-from Fleet_sim.DQN import Agent
+#from Fleet_sim.DQN import Agent
 from Fleet_sim.location import find_zone, closest_facility
 from Fleet_sim.log import lg
 from Fleet_sim.read import charging_cost
@@ -13,7 +13,7 @@ from math import ceil
 
 class Model:
 
-    def __init__(self, env, vehicles, charging_stations, zones, parkings, simulation_time, episode):
+    def __init__(self, env, vehicles, charging_stations, zones, parkings, simulation_time, episode, learner):
         self.t = []
         self.episode = episode
         self.parkings = parkings
@@ -29,7 +29,7 @@ class Model:
         self.discharging_demand_generated = []
         self.utilization = []
         self.vehicle_id = None
-        self.learner = Agent(env=env, episode=episode)
+        self.learner = learner
 
     def parking_task(self, vehicle):
         # the selected parking lot is the closest free one
@@ -126,7 +126,8 @@ class Model:
             '''if vehicle.charging_count > 0:
                 self.learner.update_value(vehicle, self.charging_stations, self.vehicles, self.waiting_list)'''
             vehicle.decision_time = round(self.env.now)
-            action = self.learner.take_action(vehicle, self.charging_stations, self.vehicles, self.waiting_list)
+            action = self.learner.take_action(vehicle, self.charging_stations, self.vehicles, self.waiting_list,
+                                              self.env, self.episode)
             vehicle.action = action
             vehicle.charging_count += 1
             return action
@@ -587,7 +588,6 @@ class Model:
             json_file.write(model_json)
         # serialize weights to HDF5
         self.learner.q_network.save_weights("model.h5")
-        print("Saved model to disk")
         # with pd.ExcelWriter("results.xlsx", engine="openpyxl", mode='a') as writer:
         results.to_csv(f'results/trips{episode}.csv')
         results_charging_demand.to_csv(f'results/charging{episode}.csv')
