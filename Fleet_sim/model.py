@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import simpy
 import random
-from Fleet_sim.DQN import Agent
+#from Fleet_sim.DQN import Agent
 from Fleet_sim.location import find_zone, closest_facility
 from Fleet_sim.log import lg
 from Fleet_sim.read import charging_cost
@@ -13,7 +13,7 @@ from math import ceil
 
 class Model:
 
-    def __init__(self, env, vehicles, charging_stations, zones, parkings, simulation_time, episode):
+    def __init__(self, env, vehicles, charging_stations, zones, parkings, simulation_time, episode, learner):
         self.t = []
         self.episode = episode
         self.parkings = parkings
@@ -29,7 +29,7 @@ class Model:
         self.discharging_demand_generated = []
         self.utilization = []
         self.vehicle_id = None
-        self.learner = Agent(env=env, episode=episode)
+        self.learner = learner
 
     def parking_task(self, vehicle):
         # the selected parking lot is the closest free one
@@ -126,7 +126,8 @@ class Model:
             '''if vehicle.charging_count > 0:
                 self.learner.update_value(vehicle, self.charging_stations, self.vehicles, self.waiting_list)'''
             vehicle.decision_time = round(self.env.now)
-            action = self.learner.take_action(vehicle, self.charging_stations, self.vehicles, self.waiting_list)
+            action = self.learner.take_action(vehicle, self.charging_stations, self.vehicles, self.waiting_list,
+                                              self.env, self.episode)
             vehicle.action = action
             vehicle.charging_count += 1
             return action
@@ -136,18 +137,9 @@ class Model:
         # action 0 ==> closest CS
         # action 1 ==> closest free CS
         # action 2 ==> closest fast CS
-        if action == 0:
-            charging_station = closest_facility(self.charging_stations, vehicle)
-        elif action == 1:
-                    free_CS = [x for x in self.charging_stations if x.plugs.count < x.capacity]
-                    if len(free_CS) >= 1:
-                        charging_station = closest_facility(free_CS, vehicle)
-                    # we send the vehicle to the closest CS, if there is no free one
-                    else:
-                        charging_station = closest_facility(self.charging_stations, vehicle)
-        elif action == 2:
-            fast_CS = [x for x in self.charging_stations if x.power == 50 / 60]
-            charging_station = closest_facility(fast_CS, vehicle)
+        for i in range(len(self.charging_stations)):
+            if action == i:
+                charging_station = self.charging_stations[1]
 
         # vehicle sends to the CS and enters the queue using a priority coming from its SOC
         yield self.env.process(self.start_charge(charging_station, vehicle))
@@ -513,10 +505,10 @@ class Model:
             if event_trip_end in events:
                 lg.info(f'A vehicle gets idle at {self.env.now}')
                 action = self.charge_check(vehicle)
-                if action in [0, 1, 2]:
+                if action in np.arange(16):
                     self.env.process(self.charge_task(vehicle, action))
                     yield self.env.timeout(0.001)
-                elif action == 3:
+                elif action == 16:
                     self.env.process(self.discharge_task(vehicle))
                     yield self.env.timeout(0.001)
                 else:
@@ -587,7 +579,6 @@ class Model:
             json_file.write(model_json)
         # serialize weights to HDF5
         self.learner.q_network.save_weights("model.h5")
-        print("Saved model to disk")
         # with pd.ExcelWriter("results.xlsx", engine="openpyxl", mode='a') as writer:
         results.to_csv(f'results/trips{episode}.csv')
         results_charging_demand.to_csv(f'results/charging{episode}.csv')

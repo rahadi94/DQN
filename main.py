@@ -7,6 +7,8 @@ from Fleet_sim.parking import Parking
 from Fleet_sim.read import zones
 from Fleet_sim.vehicle import Vehicle
 from datetime import datetime
+from Fleet_sim.DQN import Agent
+learner = Agent()
 
 episode = 0
 while episode <= 50:
@@ -93,7 +95,7 @@ while episode <= 50:
 
     # Run simulation
     sim = Model(env, vehicles=vehicles, charging_stations=charging_stations, zones=zones, parkings=parkings,
-                simulation_time=1440 * 0.05, episode=episode)
+                simulation_time=1440 * 7, episode=episode, learner=learner)
     for zone in zones:
         env.process(sim.trip_generation(zone=zone))
     env.process(sim.run())
